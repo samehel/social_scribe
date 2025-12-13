@@ -216,7 +216,29 @@ defmodule SocialScribe.Accounts do
 
   """
   def delete_user_credential(%UserCredential{} = user_credential) do
-    Repo.delete(user_credential)
+    import Ecto.Query
+
+    Repo.transaction(fn ->
+      # Delete recall_bots that reference calendar_events for this credential
+      from(rb in SocialScribe.Bots.RecallBot,
+        join: ce in SocialScribe.Calendar.CalendarEvent,
+        on: rb.calendar_event_id == ce.id,
+        where: ce.user_credential_id == ^user_credential.id
+      )
+      |> Repo.delete_all()
+
+      # Delete calendar_events for this credential
+      from(ce in SocialScribe.Calendar.CalendarEvent,
+        where: ce.user_credential_id == ^user_credential.id
+      )
+      |> Repo.delete_all()
+
+      # Delete the credential
+      case Repo.delete(user_credential) do
+        {:ok, credential} -> credential
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
   end
 
   @doc """
@@ -272,26 +294,26 @@ defmodule SocialScribe.Accounts do
   Finds or creates a user credential for a user.
   """
   def find_or_create_user_credential(user, %Auth{provider: provider} = auth)
-      when provider in [:linkedin, :facebook] do
+      when provider in [:linkedin, :facebook, :hubspot] do
     case get_user_credential(
            user,
            Atom.to_string(auth.provider)
          ) do
       nil ->
-        create_user_credential(format_credential_attrs(user, auth))
+        create_user_credential(format_credential_attrs(user, auth, nil))
 
       %UserCredential{} = credential ->
-        update_user_credential(credential, format_credential_attrs(user, auth))
+        update_user_credential(credential, format_credential_attrs(user, auth, credential))
     end
   end
 
   def find_or_create_user_credential(user, %Auth{} = auth) do
     case get_user_credential(user, Atom.to_string(auth.provider), auth.uid) do
       nil ->
-        create_user_credential(format_credential_attrs(user, auth))
+        create_user_credential(format_credential_attrs(user, auth, nil))
 
       %UserCredential{} = credential ->
-        update_user_credential(credential, format_credential_attrs(user, auth))
+        update_user_credential(credential, format_credential_attrs(user, auth, credential))
     end
   end
 
@@ -304,7 +326,7 @@ defmodule SocialScribe.Accounts do
     |> Repo.one()
   end
 
-  defp format_credential_attrs(user, %Auth{provider: :linkedin} = auth) do
+  defp format_credential_attrs(user, %Auth{provider: :linkedin} = auth, _existing_credential) do
     %{
       user_id: user.id,
       provider: to_string(auth.provider),
@@ -318,7 +340,7 @@ defmodule SocialScribe.Accounts do
     }
   end
 
-  defp format_credential_attrs(user, %Auth{provider: :facebook} = auth) do
+  defp format_credential_attrs(user, %Auth{provider: :facebook} = auth, _existing_credential) do
     %{
       user_id: user.id,
       provider: to_string(auth.provider),
@@ -332,20 +354,52 @@ defmodule SocialScribe.Accounts do
     }
   end
 
-  defp format_credential_attrs(user, %Auth{credentials: %{refresh_token: nil}} = auth) do
+  defp format_credential_attrs(user, %Auth{provider: :hubspot} = auth, existing_credential) do
+    expires_at =
+      cond do
+        auth.credentials.expires_at -> DateTime.from_unix!(auth.credentials.expires_at)
+        auth.credentials.expires_in -> DateTime.add(DateTime.utc_now(), auth.credentials.expires_in, :second)
+        true -> DateTime.add(DateTime.utc_now(), 3600, :second)
+      end
+
+    refresh_token =
+      cond do
+        auth.credentials.refresh_token -> auth.credentials.refresh_token
+        existing_credential -> existing_credential.refresh_token
+        true -> nil
+      end
+
+    uid =
+      auth.uid ||
+        (auth.extra.raw_info |> Map.get("user", %{}) |> Map.get("user_id")) ||
+        auth.credentials.token
+
+    %{
+      user_id: user.id,
+      provider: to_string(auth.provider),
+      uid: uid,
+      token: auth.credentials.token,
+      refresh_token: refresh_token,
+      expires_at: expires_at,
+      email: auth.info.email || user.email
+    }
+  end
+
+  defp format_credential_attrs(user, %Auth{credentials: %{refresh_token: nil}} = auth, existing_credential) do
     %{
       user_id: user.id,
       provider: to_string(auth.provider),
       uid: auth.uid,
       token: auth.credentials.token,
+      refresh_token: existing_credential && existing_credential.refresh_token,
       expires_at:
         (auth.credentials.expires_at && DateTime.from_unix!(auth.credentials.expires_at)) ||
           DateTime.add(DateTime.utc_now(), 3600, :second),
-      email: auth.info.email
+      email: auth.info.email || user.email
     }
   end
 
-  defp format_credential_attrs(user, %Auth{} = auth) do
+  defp format_credential_attrs(user, %Auth{} = auth, _existing_credential) do
     %{
       user_id: user.id,
       provider: to_string(auth.provider),
@@ -355,7 +409,7 @@ defmodule SocialScribe.Accounts do
       expires_at:
         (auth.credentials.expires_at && DateTime.from_unix!(auth.credentials.expires_at)) ||
           DateTime.add(DateTime.utc_now(), 3600, :second),
-      email: auth.info.email
+      email: auth.info.email || user.email
     }
   end
 
@@ -370,12 +424,21 @@ defmodule SocialScribe.Accounts do
   def update_credential_tokens(%UserCredential{} = credential, %{
         "access_token" => token,
         "expires_in" => expires_in
-      }) do
-    credential
-    |> UserCredential.changeset(%{
+      } = token_data) do
+    attrs = %{
       token: token,
       expires_at: DateTime.add(DateTime.utc_now(), expires_in, :second)
-    })
+    }
+
+    attrs =
+      if token_data["refresh_token"] do
+        Map.put(attrs, :refresh_token, token_data["refresh_token"])
+      else
+        attrs
+      end
+
+    credential
+    |> UserCredential.changeset(attrs)
     |> Repo.update()
   end
 

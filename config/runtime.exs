@@ -32,9 +32,18 @@ config :ueberauth, Ueberauth.Strategy.Facebook.OAuth,
   client_secret: System.get_env("FACEBOOK_CLIENT_SECRET"),
   redirect_uri: System.get_env("FACEBOOK_REDIRECT_URI")
 
+config :ueberauth_hubspot, :base_api_url, "https://api.hubapi.com"
+
+config :ueberauth, Ueberauth.Strategy.Hubspot.OAuth,
+  client_id: System.get_env("HUBSPOT_CLIENT_ID"),
+  client_secret: System.get_env("HUBSPOT_CLIENT_SECRET"),
+  redirect_uri: System.get_env("HUBSPOT_REDIRECT_URI"),
+  default_scope: "crm.objects.contacts.read crm.objects.contacts.write oauth"
+
 config :social_scribe, :recall_api_key, System.get_env("RECALL_API_KEY")
 config :social_scribe, :recall_region, System.get_env("RECALL_REGION")
-config :social_scribe, :gemini_api_key, System.get_env("GEMINI_API_KEY")
+config :social_scribe, :groq_api_key, System.get_env("GROQ_API_KEY")
+config :social_scribe, :groq_model, System.get_env("GROQ_MODEL")
 
 if System.get_env("PHX_SERVER") do
   config :social_scribe, SocialScribeWeb.Endpoint, server: true

@@ -9,9 +9,18 @@
     {@meeting.title}
     <.platform_logo recall_bot={@meeting.recall_bot} class="size-10" />
   </h1>
+  <div class="flex justify-end mb-6">
+    <button
+      type="button"
+      phx-click="open_update_hubspot_modal"
+      class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+    >
+      Update HubSpot
+    </button>
+  </div>
   <div class="text-sm text-slate-500 mb-6">
     <p>
-      Recorded: {@meeting.recorded_at}
+      Recorded: <time data-local-time={format_recorded_at(@meeting.recorded_at)}>{format_recorded_at(@meeting.recorded_at)}</time>
     </p>
     <p>Duration: {format_duration(@meeting.duration_seconds)}</p>
     <p>
@@ -117,6 +126,27 @@
     </div>
   </div>
 </div>
+
+<%= if @show_update_hubspot_modal do %>
+  <div
+    id="update-hubspot-modal"
+    class="fixed inset-0 z-50 flex items-center justify-center"
+    phx-window-keydown={JS.push("close_update_hubspot_modal")}
+    phx-key="escape"
+  >
+    <div
+      class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+      phx-click={JS.push("close_update_hubspot_modal")}
+    ></div>
+
+    <div class="relative mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-0">
+      <.live_component
+        module={SocialScribeWeb.MeetingLive.ContactSearchModalComponent}
+        id={"contact-search-modal-#{@meeting.id}"}
+      />
+    </div>
+  </div>
+<% end %>
 
 <.modal
   :if={@live_action == :draft_post}

@@ -9,6 +9,7 @@ defmodule SocialScribeWeb.PlatformLogo do
       cond do
         String.contains?(assigns.recall_bot.meeting_url, "meet.google.com") -> "google_meet"
         String.contains?(assigns.recall_bot.meeting_url, "zoom.us") -> "zoom"
+        String.contains?(assigns.recall_bot.meeting_url, "teams.microsoft.com") -> "teams"
         true -> "google_meet"
       end
 
@@ -23,6 +24,8 @@ defmodule SocialScribeWeb.PlatformLogo do
         <.google_meet_logo class={@class} />
       <% "zoom" -> %>
         <.zoom_logo class={@class} />
+      <% "teams" -> %>
+        <.teams_logo class={@class} />
       <% _ -> %>
         <.google_meet_logo class={@class} />
     <% end %>
@@ -62,6 +65,17 @@ defmodule SocialScribeWeb.PlatformLogo do
         >
         </path>
       </g>
+    </svg>
+    """
+  end
+
+  attr :class, :string, required: true
+
+  defp teams_logo(assigns) do
+    ~H"""
+    <svg class={@class} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+      <rect width="48" height="48" rx="8" fill="#5B5FC7"></rect>
+      <path fill="#FFFFFF" d="M20 14c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 4c-2.67 0-8 1.34-8 4v6h16v-6c0-2.66-5.33-4-8-4zm12-2c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0 2c-2 0-6 1-6 3v5h12v-5c0-2-4-3-6-3z"></path>
     </svg>
     """
   end

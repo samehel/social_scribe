@@ -34,7 +34,7 @@
                 {event.summary}
               </h3>
               <p class="text-sm text-slate-500  mb-2">
-                {Timex.format!(event.start_time, "%m/%d/%Y, %H:%M:%S", :strftime)}
+                <time data-local-time={DateTime.to_iso8601(event.start_time)}>{DateTime.to_iso8601(event.start_time)}</time>
               </p>
             </div>
             <div class="mt-4 sm:mt-0 sm:ml-4 flex-shrink-0">

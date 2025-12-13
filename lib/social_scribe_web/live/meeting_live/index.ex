@@ -23,4 +23,10 @@ defmodule SocialScribeWeb.MeetingLive.Index do
     minutes = div(seconds, 60)
     "#{minutes} min"
   end
+
+  defp format_recorded_at(nil), do: "N/A"
+
+  defp format_recorded_at(%DateTime{} = recorded_at) do
+    DateTime.to_iso8601(recorded_at)
+  end
 end

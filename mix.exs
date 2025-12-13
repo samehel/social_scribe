@@ -1,6 +1,20 @@
 defmodule SocialScribe.MixProject do
   use Mix.Project
 
+  # Load environment variables from .env file
+  if File.exists?(".env") do
+    File.stream!(".env")
+    |> Stream.map(&String.trim/1)
+    |> Stream.reject(&String.starts_with?(&1, "#"))
+    |> Stream.reject(&(&1 == ""))
+    |> Enum.each(fn line ->
+      case String.split(line, "=", parts: 2) do
+        [key, value] -> System.put_env(key, value)
+        _ -> :ok
+      end
+    end)
+  end
+
   def project do
     [
       app: :social_scribe,
@@ -32,6 +46,7 @@ defmodule SocialScribe.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:dotenv, "~> 3.0"},
       {:oban_web, "~> 2.11"},
       {:oban, "~> 2.19"},
       {:igniter, "~> 0.5", only: [:dev]},
@@ -41,6 +56,7 @@ defmodule SocialScribe.MixProject do
       {:ueberauth_google, "~> 0.12.1"},
       {:ueberauth_linkedin, "~> 0.10.8", hex: :ueberauth_linkedin_modern},
       {:ueberauth_facebook, "~> 0.10"},
+      {:ueberauth_hubspot, "~> 0.1"},
       {:ueberauth, "~> 0.10.8"},
       {:bcrypt_elixir, "~> 3.0"},
       {:phoenix, "~> 1.7.21"},

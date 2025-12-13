@@ -64,6 +64,28 @@ defmodule SocialScribeWeb.AuthController do
   end
 
   def callback(%{assigns: %{ueberauth_auth: auth, current_user: user}} = conn, %{
+        "provider" => "hubspot"
+      })
+      when not is_nil(user) do
+    Logger.info("HubSpot OAuth")
+    Logger.info(auth)
+
+    case Accounts.find_or_create_user_credential(user, auth) do
+      {:ok, _credential} ->
+        conn
+        |> put_flash(:info, "HubSpot account added successfully.")
+        |> redirect(to: ~p"/dashboard/settings")
+
+      {:error, reason} ->
+        Logger.error(reason)
+
+        conn
+        |> put_flash(:error, "Could not add HubSpot account.")
+        |> redirect(to: ~p"/dashboard/settings")
+    end
+  end
+
+  def callback(%{assigns: %{ueberauth_auth: auth, current_user: user}} = conn, %{
         "provider" => "facebook"
       })
       when not is_nil(user) do

@@ -92,6 +92,12 @@ defmodule SocialScribeWeb.Router do
     end
   end
 
+  scope "/webhooks", SocialScribeWeb do
+    pipe_through :api
+
+    post "/recall", WebhookController, :recall
+  end
+
   scope "/", SocialScribeWeb do
     pipe_through [:browser]
 

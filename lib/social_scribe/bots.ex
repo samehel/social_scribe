@@ -3,6 +3,7 @@ defmodule SocialScribe.Bots do
   The Bots context.
   """
 
+  require Logger
   import Ecto.Query, warn: false
   alias SocialScribe.Repo
 
@@ -118,29 +119,43 @@ defmodule SocialScribe.Bots do
   Orchestrates creating a bot via the API and saving it to the database.
   """
   def create_and_dispatch_bot(user, calendar_event) do
-    user_bot_preference = get_user_bot_preference(user.id) || %{}
+    case Repo.get_by(RecallBot, calendar_event_id: calendar_event.id) do
+      %RecallBot{} = existing_bot ->
+        Logger.info("Bot already exists for calendar event #{calendar_event.id}, returning existing bot")
+        {:ok, existing_bot}
 
-    join_minute_offset =
-      Map.get(user_bot_preference, :join_minute_offset, 2)
+      nil ->
+        user_bot_preference = get_user_bot_preference(user.id) || %{}
 
-    with {:ok, %{body: api_response}} <-
-           RecallApi.create_bot(
-             calendar_event.hangout_link,
-             DateTime.add(
-               calendar_event.start_time,
-               -join_minute_offset,
-               :minute
-             )
-           ) do
-      create_recall_bot(%{
-        user_id: user.id,
-        calendar_event_id: calendar_event.id,
-        recall_bot_id: api_response.id,
-        meeting_url: calendar_event.hangout_link,
-        status: api_response.status_changes |> List.first() |> Map.get(:code)
-      })
-    else
-      {:error, reason} -> {:error, {:api_error, reason}}
+        join_minute_offset =
+          Map.get(user_bot_preference, :join_minute_offset, 2)
+
+        with {:ok, %{body: api_response}} <-
+               RecallApi.create_bot(
+                 calendar_event.hangout_link,
+                 DateTime.add(
+                   calendar_event.start_time,
+                   -join_minute_offset,
+                   :minute
+                 )
+               ) do
+          status =
+            case api_response.status_changes do
+              nil -> "pending"
+              [] -> "pending"
+              status_changes -> List.first(status_changes) |> Map.get(:code, "pending")
+            end
+
+          create_recall_bot(%{
+            user_id: user.id,
+            calendar_event_id: calendar_event.id,
+            recall_bot_id: api_response.id,
+            meeting_url: calendar_event.hangout_link,
+            status: status
+          })
+        else
+          {:error, reason} -> {:error, {:api_error, reason}}
+        end
     end
   end
 

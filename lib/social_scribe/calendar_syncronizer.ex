@@ -36,7 +36,8 @@ defmodule SocialScribe.CalendarSyncronizer do
              DateTime.utc_now() |> Timex.end_of_day() |> Timex.shift(days: 7),
              "primary"
            ),
-         :ok <- sync_items(items, credential.user_id, credential.id) do
+         :ok <- sync_items(items, credential.user_id, credential.id),
+         :ok <- delete_removed_events(items, credential.user_id) do
       :ok
     else
       {:error, reason} ->
@@ -48,15 +49,19 @@ defmodule SocialScribe.CalendarSyncronizer do
 
   defp ensure_valid_token(%UserCredential{} = credential) do
     if DateTime.compare(credential.expires_at || DateTime.utc_now(), DateTime.utc_now()) == :lt do
-      case TokenRefresherApi.refresh_token(credential.refresh_token) do
-        {:ok, new_token_data} ->
-          {:ok, updated_credential} =
-            Accounts.update_credential_tokens(credential, new_token_data)
+      if credential.refresh_token do
+        case TokenRefresherApi.refresh_token(credential.refresh_token) do
+          {:ok, new_token_data} ->
+            {:ok, updated_credential} =
+              Accounts.update_credential_tokens(credential, new_token_data)
 
-          {:ok, updated_credential.token}
+            {:ok, updated_credential.token}
 
-        {:error, reason} ->
-          {:error, {:refresh_failed, reason}}
+          {:error, reason} ->
+            {:error, {:refresh_failed, reason}}
+        end
+      else
+        {:error, {:refresh_failed, "No refresh token available. Please reconnect your account."}}
       end
     else
       {:ok, credential.token}
@@ -65,9 +70,24 @@ defmodule SocialScribe.CalendarSyncronizer do
 
   defp sync_items(items, user_id, credential_id) do
     Enum.each(items, fn item ->
-      # We only sync meetings that have a zoom or google meet link for now
-      if String.contains?(Map.get(item, "location", ""), ".zoom.") || Map.get(item, "hangoutLink") do
-        Calendar.create_or_update_calendar_event(parse_google_event(item, user_id, credential_id))
+      location = Map.get(item, "location", "")
+      hangout_link = Map.get(item, "hangoutLink")
+
+      has_zoom = String.contains?(location, ".zoom.")
+      has_google_meet = hangout_link != nil
+      has_teams = String.contains?(location, "teams.microsoft.com")
+
+      if has_zoom || has_google_meet || has_teams do
+        parsed_event = parse_google_event(item, user_id, credential_id)
+
+        # Check if event exists and log time changes
+        existing_event = Calendar.get_calendar_event_by_google_id(user_id, parsed_event.google_event_id)
+
+        if existing_event do
+          log_time_changes_if_significant(existing_event, parsed_event)
+        end
+
+        Calendar.create_or_update_calendar_event(parsed_event)
       end
     end)
 
@@ -78,13 +98,19 @@ defmodule SocialScribe.CalendarSyncronizer do
     start_time_str = Map.get(item["start"], "dateTime", Map.get(item["start"], "date"))
     end_time_str = Map.get(item["end"], "dateTime", Map.get(item["end"], "date"))
 
+    hangout_link =
+      Map.get(item, "hangoutLink") ||
+        Map.get(item, "location") ||
+        Map.get(item, "description") ||
+        ""
+
     %{
       google_event_id: item["id"],
       summary: Map.get(item, "summary", "No Title"),
       description: Map.get(item, "description"),
       location: Map.get(item, "location"),
       html_link: Map.get(item, "htmlLink"),
-      hangout_link: Map.get(item, "hangoutLink", Map.get(item, "location")),
+      hangout_link: hangout_link,
       status: Map.get(item, "status"),
       start_time: to_utc_datetime(start_time_str),
       end_time: to_utc_datetime(end_time_str),
@@ -101,5 +127,78 @@ defmodule SocialScribe.CalendarSyncronizer do
       _ ->
         nil
     end
+  end
+
+  defp log_time_changes_if_significant(existing_event, new_event_data) do
+    # Minimum time difference to consider significant: 5 minutes (300 seconds)
+    min_diff_seconds = 300
+
+    start_diff =
+      if existing_event.start_time && new_event_data.start_time do
+        abs(DateTime.diff(existing_event.start_time, new_event_data.start_time))
+      else
+        0
+      end
+
+    end_diff =
+      if existing_event.end_time && new_event_data.end_time do
+        abs(DateTime.diff(existing_event.end_time, new_event_data.end_time))
+      else
+        0
+      end
+
+    cond do
+      start_diff >= min_diff_seconds && end_diff >= min_diff_seconds ->
+        Logger.info(
+          "Calendar event time changed: '#{existing_event.summary}' (ID: #{existing_event.id}) - " <>
+          "Start moved by #{div(start_diff, 60)} minutes, End moved by #{div(end_diff, 60)} minutes"
+        )
+
+      start_diff >= min_diff_seconds ->
+        Logger.info(
+          "Calendar event start time changed: '#{existing_event.summary}' (ID: #{existing_event.id}) - " <>
+          "Moved by #{div(start_diff, 60)} minutes"
+        )
+
+      end_diff >= min_diff_seconds ->
+        Logger.info(
+          "Calendar event end time changed: '#{existing_event.summary}' (ID: #{existing_event.id}) - " <>
+          "Moved by #{div(end_diff, 60)} minutes"
+        )
+
+      true ->
+        # No significant change
+        :ok
+    end
+  end
+
+  defp delete_removed_events(google_items, user_id) do
+    # Get all google_event_ids from the API response
+    google_event_ids = Enum.map(google_items, & &1["id"]) |> MapSet.new()
+
+    # Get all upcoming calendar events for this user from database
+    time_range_start = DateTime.utc_now() |> Timex.beginning_of_day() |> Timex.shift(days: -1)
+    time_range_end = DateTime.utc_now() |> Timex.end_of_day() |> Timex.shift(days: 7)
+
+    db_events = Calendar.list_calendar_events_in_range(user_id, time_range_start, time_range_end)
+
+    # Find events in database that are NOT in Google Calendar anymore
+    events_to_delete =
+      Enum.filter(db_events, fn event ->
+        not MapSet.member?(google_event_ids, event.google_event_id)
+      end)
+
+    # Delete each event with cascade (delete related records first)
+    Enum.each(events_to_delete, fn event ->
+      case Calendar.delete_calendar_event_cascade(event) do
+        {:ok, _deleted} ->
+          Logger.info("Deleted calendar event #{event.id} (#{event.summary}) - no longer in Google Calendar")
+
+        {:error, reason} ->
+          Logger.error("Failed to delete calendar event #{event.id}: #{inspect(reason)}")
+      end
+    end)
+
+    :ok
   end
 end

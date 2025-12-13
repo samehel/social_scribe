@@ -44,3 +44,54 @@ liveSocket.connect()
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
 
+// Convert UTC timestamps to user's local timezone
+function formatLocalTime() {
+  document.querySelectorAll('time[data-local-time]').forEach(timeElement => {
+    const isoString = timeElement.getAttribute('data-local-time')
+    if (isoString && isoString !== 'N/A') {
+      try {
+        const date = new Date(isoString)
+        // Format: "Dec 13, 2025 9:30 PM"
+        const formatted = date.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        })
+        timeElement.textContent = formatted
+      } catch (e) {
+        console.error('Failed to parse date:', isoString, e)
+      }
+    }
+  })
+}
+
+// Format times on initial page load
+formatLocalTime()
+
+// Format times after LiveView updates
+window.addEventListener('phx:page-loading-stop', () => {
+  formatLocalTime()
+})
+
+// Format times after LiveView patches DOM
+window.addEventListener('phx:update', () => {
+  formatLocalTime()
+})
+
+// Format times when LiveView connects/reconnects
+liveSocket.hooks.LocalTime = {
+  mounted() {
+    formatLocalTime()
+  },
+  updated() {
+    formatLocalTime()
+  }
+}
+
+// Run after a short delay to catch async renders
+setTimeout(() => {
+  formatLocalTime()
+}, 100)

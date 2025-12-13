@@ -48,7 +48,13 @@
               <% end %>
             </p>
           </div>
-          <!-- Future: Add a "Disconnect" button here -->
+          <button
+            phx-click="disconnect_google"
+            phx-value-id={account.id}
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          >
+            Disconnect
+          </button>
         </li>
       </ul>
     <% else %>
@@ -150,6 +156,68 @@
         </.link>
       </div>
     <% end %>
+  </div>
+
+  <div class="bg-white  shadow-xl rounded-lg p-6 md:p-8">
+    <h2 class="text-2xl font-semibold mb-6 text-slate-700 ">
+      Connected HubSpot Account
+    </h2>
+
+    <%= if not Enum.empty?(@hubspot_accounts) do %>
+      <ul class="space-y-4 mb-8">
+        <li
+          :for={account <- @hubspot_accounts}
+          class="flex justify-between items-center p-4 bg-slate-50  rounded-md shadow"
+        >
+          <div class="flex-1 min-w-0 mr-4">
+            <p class="font-medium text-slate-700 ">
+              HubSpot Account
+            </p>
+            <p class="text-sm text-slate-500 break-words">
+              UID: {account.uid}
+              <%= if account.email do %>
+                ({account.email})
+              <% end %>
+            </p>
+          </div>
+          <button
+            phx-click="disconnect_hubspot"
+            phx-value-id={account.id}
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex-shrink-0"
+          >
+            Disconnect
+          </button>
+        </li>
+      </ul>
+    <% else %>
+      <p class="mb-8 text-slate-600 ">
+        You haven't connected HubSpot yet.
+      </p>
+    <% end %>
+
+    <div>
+      <.link
+        href={~p"/auth/hubspot?scope=crm.objects.contacts.read%20crm.objects.contacts.write%20oauth"}
+        method="get"
+        class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 "
+      >
+        <svg
+          class="-ml-1 mr-3 h-5 w-5"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            fill-rule="evenodd"
+            d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2h6v2H7V4zm0 4h6v2H7V8zm0 4h6v2H7v-2z"
+            clip-rule="evenodd"
+          />
+          <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM5.121 5.121A6.974 6.974 0 0110 3.05a6.974 6.974 0 014.879 1.928.75.75 0 001.06-1.06A8.474 8.474 0 0010 1.55a8.474 8.474 0 00-5.94 2.511.75.75 0 001.06 1.06z" />
+        </svg>
+        Connect HubSpot
+      </.link>
+    </div>
   </div>
 
   <div class="bg-white  shadow-xl rounded-lg p-6 md:p-8">

@@ -347,17 +347,51 @@ defmodule SocialScribe.Meetings do
     calendar_event = Repo.preload(recall_bot, :calendar_event).calendar_event
 
     Repo.transaction(fn ->
-      meeting_attrs = parse_meeting_attrs(calendar_event, recall_bot, bot_api_info)
+      meeting_attrs =
+        parse_meeting_attrs(calendar_event, recall_bot, bot_api_info)
+        |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+        |> Enum.into(%{})
 
-      {:ok, meeting} = create_meeting(meeting_attrs)
+      meeting =
+        case Repo.get_by(Meeting, recall_bot_id: recall_bot.id) do
+          nil ->
+            {:ok, meeting} = create_meeting(meeting_attrs)
+            meeting
+
+          %Meeting{} = existing_meeting ->
+            {:ok, meeting} = update_meeting(existing_meeting, meeting_attrs)
+            meeting
+        end
 
       transcript_attrs = parse_transcript_attrs(meeting, transcript_data)
 
-      {:ok, _transcript} = create_meeting_transcript(transcript_attrs)
+      case Repo.get_by(MeetingTranscript, meeting_id: meeting.id) do
+        nil ->
+          {:ok, _transcript} = create_meeting_transcript(transcript_attrs)
 
-      Enum.each(bot_api_info.meeting_participants || [], fn participant_data ->
+        %MeetingTranscript{} = existing_transcript ->
+          update_attrs = Map.delete(transcript_attrs, :meeting_id)
+          {:ok, _transcript} = update_meeting_transcript(existing_transcript, update_attrs)
+      end
+
+      participants =
+        cond do
+          is_map(bot_api_info) && Map.has_key?(bot_api_info, :meeting_participants) ->
+            Map.get(bot_api_info, :meeting_participants, [])
+
+          is_map(bot_api_info) && Map.has_key?(bot_api_info, "meeting_participants") ->
+            Map.get(bot_api_info, "meeting_participants", [])
+
+          true ->
+            []
+        end
+
+      from(mp in MeetingParticipant, where: mp.meeting_id == ^meeting.id)
+      |> Repo.delete_all()
+
+      Enum.each(participants, fn participant_data ->
         participant_attrs = parse_participant_attrs(meeting, participant_data)
-        create_meeting_participant(participant_attrs)
+        {:ok, _} = create_meeting_participant(participant_attrs)
       end)
 
       Repo.preload(meeting, [:meeting_transcript, :meeting_participants])
@@ -402,10 +436,21 @@ defmodule SocialScribe.Meetings do
   end
 
   defp parse_transcript_attrs(meeting, transcript_data) do
+    language =
+      case transcript_data do
+        list when is_list(list) and length(list) > 0 ->
+          first_item = List.first(list)
+          if is_map(first_item), do: Map.get(first_item, :language, "unknown"), else: "unknown"
+        map when is_map(map) ->
+          Map.get(map, :language, "unknown")
+        _ ->
+          "unknown"
+      end
+
     %{
       meeting_id: meeting.id,
       content: %{data: transcript_data},
-      language: List.first(transcript_data || []) |> Map.get(:language, "unknown")
+      language: language
     }
   end
 
@@ -422,25 +467,21 @@ defmodule SocialScribe.Meetings do
   Generates a prompt for a meeting.
   """
   def generate_prompt_for_meeting(%Meeting{} = meeting) do
-    case participants_to_string(meeting.meeting_participants) do
-      {:error, :no_participants} ->
-        {:error, :no_participants}
+    {:ok, participants_string} = participants_to_string(meeting.meeting_participants)
 
-      {:ok, participants_string} ->
-        case transcript_to_string(meeting.meeting_transcript) do
-          {:error, :no_transcript} ->
-            {:error, :no_transcript}
+    case transcript_to_string(meeting.meeting_transcript) do
+      {:error, :no_transcript} ->
+        {:error, :no_transcript}
 
-          {:ok, transcript_string} ->
-            {:ok,
-             generate_prompt(
-               meeting.title,
-               meeting.recorded_at,
-               meeting.duration_seconds,
-               participants_string,
-               transcript_string
-             )}
-        end
+      {:ok, transcript_string} ->
+        {:ok,
+         generate_prompt(
+           meeting.title,
+           meeting.recorded_at,
+           meeting.duration_seconds,
+           participants_string,
+           transcript_string
+         )}
     end
   end
 
@@ -461,7 +502,7 @@ defmodule SocialScribe.Meetings do
 
   defp participants_to_string(participants) do
     if Enum.empty?(participants) do
-      {:error, :no_participants}
+      {:ok, "No participant information available"}
     else
       participants_string =
         participants
@@ -482,11 +523,41 @@ defmodule SocialScribe.Meetings do
   defp transcript_to_string(_), do: {:error, :no_transcript}
 
   defp format_transcript_for_prompt(transcript_segments) when is_list(transcript_segments) do
-    Enum.map_join(transcript_segments, "\n", fn segment ->
-      speaker = Map.get(segment, "speaker", "Unknown Speaker")
-      text = Enum.map_join(Map.get(segment, "words", []), " ", &Map.get(&1, "text", ""))
-      "#{speaker}: #{text}"
+    transcript_segments
+    |> Enum.map(fn segment ->
+      speaker =
+        cond do
+          participant = Map.get(segment, "participant") ->
+            Map.get(participant, "name") || "Unknown Speaker"
+
+          participant = Map.get(segment, :participant) ->
+            Map.get(participant, :name) || Map.get(participant, "name") || "Unknown Speaker"
+
+          true ->
+            Map.get(segment, "speaker") || Map.get(segment, :speaker) || "Unknown Speaker"
+        end
+
+      words_source = Map.get(segment, "words") || Map.get(segment, :words)
+
+      words =
+        cond do
+          is_list(words_source) ->
+            words_source
+            |> Enum.map(&Map.get(&1, "text") || Map.get(&1, :text) || "")
+            |> Enum.reject(&(&1 == ""))
+
+          text = Map.get(segment, "text") || Map.get(segment, :text) ->
+            [text]
+
+          true ->
+            []
+        end
+        |> Enum.join(" ")
+        |> String.trim()
+
+      "#{speaker}: #{words}"
     end)
+    |> Enum.join("\n")
   end
 
   defp format_transcript_for_prompt(_), do: ""

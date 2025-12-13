@@ -14,6 +14,8 @@ defmodule SocialScribeWeb.UserSettingsLive do
 
     facebook_accounts = Accounts.list_user_credentials(current_user, provider: "facebook")
 
+    hubspot_accounts = Accounts.list_user_credentials(current_user, provider: "hubspot")
+
     user_bot_preference =
       Bots.get_user_bot_preference(current_user.id) || %Bots.UserBotPreference{}
 
@@ -25,6 +27,7 @@ defmodule SocialScribeWeb.UserSettingsLive do
       |> assign(:google_accounts, google_accounts)
       |> assign(:linkedin_accounts, linkedin_accounts)
       |> assign(:facebook_accounts, facebook_accounts)
+      |> assign(:hubspot_accounts, hubspot_accounts)
       |> assign(:user_bot_preference, user_bot_preference)
       |> assign(:user_bot_preference_form, to_form(changeset))
 
@@ -81,6 +84,47 @@ defmodule SocialScribeWeb.UserSettingsLive do
   @impl true
   def handle_event("validate", params, socket) do
     {:noreply, assign(socket, :form, to_form(params))}
+  end
+
+  @impl true
+  def handle_event("disconnect_google", %{"id" => credential_id}, socket) do
+    credential = Accounts.get_user_credential!(credential_id)
+
+    case Accounts.delete_user_credential(credential) do
+      {:ok, _} ->
+        google_accounts = Accounts.list_user_credentials(socket.assigns.current_user, provider: "google")
+
+        socket =
+          socket
+          |> assign(:google_accounts, google_accounts)
+          |> put_flash(:info, "Google account disconnected successfully")
+
+        {:noreply, socket}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to disconnect Google account")}
+    end
+  end
+
+  @impl true
+  def handle_event("disconnect_hubspot", %{"id" => credential_id}, socket) do
+    credential = Accounts.get_user_credential!(credential_id)
+
+    case Accounts.delete_user_credential(credential) do
+      {:ok, _} ->
+        hubspot_accounts =
+          Accounts.list_user_credentials(socket.assigns.current_user, provider: "hubspot")
+
+        socket =
+          socket
+          |> assign(:hubspot_accounts, hubspot_accounts)
+          |> put_flash(:info, "HubSpot account disconnected successfully")
+
+        {:noreply, socket}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to disconnect HubSpot account")}
+    end
   end
 
   @impl true
