@@ -6,6 +6,180 @@ Social Scribe is a powerful Elixir and Phoenix LiveView application designed to 
 
 ---
 
+## 🆕 Recent Changes & Enhancements
+
+This section documents the major features and improvements added in the latest update (December 2025).
+
+### 🎯 HubSpot CRM Integration (NEW)
+**Complete HubSpot integration for meeting-based CRM updates**
+
+- **HubSpot OAuth Authentication** (`lib/social_scribe/hubspot_oauth.ex`)
+  - Secure OAuth 2.0 flow for HubSpot account connection
+  - Token management and refresh handling
+  - User settings page integration for connecting/disconnecting HubSpot accounts
+
+- **HubSpot API Client** (`lib/social_scribe/hubspot.ex`)
+  - Contact search functionality with customizable filters
+  - Contact retrieval with detailed property access
+  - Contact update capabilities for CRM synchronization
+  - Comprehensive error handling for API failures
+  - Rate limiting and retry logic
+
+- **AI-Powered Contact Field Suggestions** (`lib/social_scribe/ai_content_generator.ex`)
+  - Analyzes meeting transcripts to extract contact information
+  - Suggests updates for HubSpot contact fields (company, job title, phone, etc.)
+  - Provides reasoning for each suggested change
+  - Filters out suggestions that match existing values
+
+- **Interactive Contact Search Modal** (`lib/social_scribe_web/live/meeting_live/contact_search_modal_component.ex` - 550 lines)
+  - Real-time contact search within HubSpot
+  - Contact selection and preview
+  - AI-generated field update suggestions with toggle selection
+  - Bulk update functionality with success/error feedback
+  - Modern, responsive UI with smooth animations
+
+- **Meeting Details Enhancement** (`lib/social_scribe_web/live/meeting_live/show.ex` - +710 lines)
+  - "Update HubSpot" button on meeting detail pages
+  - Seamless integration with contact search modal
+  - Real-time status updates during API operations
+  - Error handling with user-friendly messages
+
+- **Comprehensive Test Coverage** (`test/social_scribe/hubspot_test.exs` - 239 lines)
+  - 19 test cases covering all HubSpot API operations
+  - Mock-based testing using Mox and Tesla.Mock
+  - Edge case and error scenario coverage
+  - Authorization and parameter validation tests
+
+### 📅 Calendar & Meeting Improvements
+
+- **Enhanced Meeting Link Detection** (`lib/social_scribe/calendar_syncronizer.ex`)
+  - Now checks for meeting links in **three locations**: `location`, `description`, and `hangoutLink` fields
+  - **Microsoft Teams support added** - detects and extracts Teams meeting links
+  - Supports Zoom, Google Meet, and Microsoft Teams platforms
+  - More robust link extraction for various meeting formats
+
+- **Calendar Event Validations** (`lib/social_scribe/calendar/calendar_event.ex`)
+  - Start time must be before end time
+  - Meeting duration must be between 1 minute and 24 hours
+  - Prevents invalid calendar event creation
+
+- **Meeting Time Change Detection** (`lib/social_scribe/calendar_syncronizer.ex`)
+  - Detects when calendar events are rescheduled (5-minute threshold)
+  - Automatically cancels and recreates Recall.ai bots for moved meetings
+  - Logs time changes for audit trail
+  - Prevents duplicate bot creation
+
+- **Cascade Deletion Support** (`lib/social_scribe/bots.ex`, `lib/social_scribe/calendar.ex`)
+  - Deleting a calendar event now properly cascades to associated bots
+  - Prevents orphaned records in the database
+  - Maintains referential integrity across tables
+
+- **Client-Side Timezone Conversion** (`assets/js/app.js`)
+  - Meeting times now display in user's local timezone
+  - Automatic conversion from UTC to local time
+  - Improved user experience for global teams
+
+### 🔗 Webhook System (NEW)
+
+- **Webhook Controller** (`lib/social_scribe_web/controllers/webhook_controller.ex` - 315 lines)
+  - Handles incoming webhooks from external services
+  - Secure webhook validation and authentication
+  - Event processing and routing
+  - Comprehensive logging for debugging
+
+### 🔐 Authentication & User Management
+
+- **Enhanced User Settings** (`lib/social_scribe_web/live/user_settings_live.ex`)
+  - HubSpot account connection interface
+  - Visual indicators for connected services
+  - One-click disconnect functionality
+  - Improved layout and user experience
+
+- **Auth Controller Updates** (`lib/social_scribe_web/controllers/auth_controller.ex`)
+  - HubSpot OAuth callback handling
+  - Improved error handling for failed authentications
+  - Session management enhancements
+
+### 🧪 Testing Infrastructure
+
+- **Test Helper Improvements** (`test/test_helper.exs`)
+  - HubSpot mock configuration
+  - Tesla Mock adapter setup for HTTP testing
+  - Mox behavior definitions for all external services
+
+- **Test Configuration** (`config/test.exs`)
+  - Tesla Mock adapter enabled for test environment
+  - Proper isolation of test dependencies
+
+### 📦 Dependencies & Configuration
+
+- **New Dependencies** (`mix.exs`)
+  - `tesla` - HTTP client for API interactions
+  - `nimble_options` - Schema validation for options
+
+- **Environment Configuration**
+  - `.env.example` added with all required environment variables:
+  
+    ```bash
+    GOOGLE_CLIENT_ID=
+    GOOGLE_CLIENT_SECRET=
+    GOOGLE_REDIRECT_URI=
+    RECALL_API_KEY=
+    RECALL_REGION=
+    GROQ_API_KEY=
+    GROQ_MODEL=
+    HUBSPOT_CLIENT_ID=
+    HUBSPOT_CLIENT_SECRET=
+    HUBSPOT_REDIRECT_URI=
+    ```
+  - HubSpot credentials configuration
+  - Runtime configuration updates (`config/runtime.exs`)
+
+### 🎨 UI/UX Enhancements
+
+- **Platform Logos** (`lib/social_scribe_web/components/platform_logo.ex`)
+  - Visual indicators for meeting platforms (Zoom, Google Meet)
+  - Consistent branding across the application
+
+- **Meeting List Improvements** (`lib/social_scribe_web/live/meeting_live/index.ex`)
+  - Better formatting and layout
+  - Improved loading states
+  - Enhanced error messages
+
+### 🐛 Bug Fixes & Stability
+
+- **Accounts Module** (`lib/social_scribe/accounts.ex` - +95 lines)
+  - Fixed user credential management
+  - Improved token refresh logic
+  - Better error handling for expired credentials
+
+- **Meetings Module** (`lib/social_scribe/meetings.ex` - +133 lines)
+  - Fixed transcript parsing issues
+  - Improved participant tracking
+  - Better handling of incomplete meetings
+
+- **Recall.ai Integration** (`lib/social_scribe/recall.ex`)
+  - Enhanced bot status polling
+  - Improved error recovery
+  - Better logging for debugging
+
+### 📊 Statistics
+
+**Total Changes:**
+- **35 files modified**
+- **3,103 lines added**
+- **139 lines removed**
+- **Net: +2,964 lines**
+
+**Major Components:**
+- Contact Search Modal: 550 lines
+- Meeting Live Show: +710 lines
+- Webhook Controller: 315 lines
+- HubSpot Tests: 239 lines
+- AI Content Generator: +353 lines
+
+---
+
 **➡️ [Live Demo](https://social-scribe.fly.dev/) ⬅️**
 
 ---
