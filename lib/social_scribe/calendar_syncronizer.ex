@@ -71,11 +71,12 @@ defmodule SocialScribe.CalendarSyncronizer do
   defp sync_items(items, user_id, credential_id) do
     Enum.each(items, fn item ->
       location = Map.get(item, "location", "")
+      description = Map.get(item, "description", "")
       hangout_link = Map.get(item, "hangoutLink")
 
-      has_zoom = String.contains?(location, ".zoom.")
+      has_zoom = String.contains?(location, ".zoom.") or String.contains?(description, ".zoom.")
       has_google_meet = hangout_link != nil
-      has_teams = String.contains?(location, "teams.microsoft.com")
+      has_teams = String.contains?(location, "teams.live.com") or String.contains?(description, "teams.live.com")
 
       if has_zoom || has_google_meet || has_teams do
         parsed_event = parse_google_event(item, user_id, credential_id)
