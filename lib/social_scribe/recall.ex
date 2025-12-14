@@ -8,7 +8,7 @@ defmodule SocialScribe.Recall do
     api_key = Application.fetch_env!(:social_scribe, :recall_api_key)
     recall_region = Application.fetch_env!(:social_scribe, :recall_region)
 
-    base_url = "https://#{recall_region}.recall.ai/api/v2"
+    base_url = "https://#{recall_region}.recall.ai/api/v1"
     Logger.info("Recall.ai client connecting to: #{base_url}")
 
     Tesla.client([
