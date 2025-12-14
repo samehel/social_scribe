@@ -10,7 +10,7 @@ defmodule SocialScribe.Application do
     children = [
       SocialScribeWeb.Telemetry,
       SocialScribe.Repo,
-      {DNSCluster, query: Application.get_env(:social_scribe, :dns_cluster_query) || :ignore},
+      {DNSCluster, query: Application.get_env(:social_scribe, :dns_cluster_query) || nil},
       {Oban, Application.fetch_env!(:social_scribe, Oban)},
       {Phoenix.PubSub, name: SocialScribe.PubSub},
       # Start the Finch HTTP client for sending emails
