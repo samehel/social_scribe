@@ -183,9 +183,11 @@ defmodule SocialScribe.CalendarSyncronizer do
     db_events = Calendar.list_calendar_events_in_range(user_id, time_range_start, time_range_end)
 
     # Find events in database that are NOT in Google Calendar anymore
+    # But never delete events that have completed meetings
     events_to_delete =
       Enum.filter(db_events, fn event ->
-        not MapSet.member?(google_event_ids, event.google_event_id)
+        not MapSet.member?(google_event_ids, event.google_event_id) and
+        not Calendar.has_completed_meeting?(event)
       end)
 
     # Delete each event with cascade (delete related records first)
