@@ -14,30 +14,26 @@ defmodule SocialScribe.Calendar do
   Filters out events that already have past meetings.
   """
   def list_upcoming_events(user) do
-    all_upcoming =
-      from(e in CalendarEvent,
-        where: e.user_id == ^user.id and e.start_time > ^DateTime.utc_now(),
-        order_by: [asc: e.start_time]
-      )
-      |> Repo.all()
-
-    # Get all meetings for the user to check which calendar events have past meetings
+    # Get all meetings for the user by joining through calendar_event
     user_meetings =
       from(m in SocialScribe.Meetings.Meeting,
-        where: m.user_id == ^user.id,
-        preload: [:calendar_event]
+        join: ce in assoc(m, :calendar_event),
+        where: ce.user_id == ^user.id,
+        select: m.calendar_event_id
       )
       |> Repo.all()
 
-    # Extract calendar event IDs that have meetings
-    meeting_calendar_event_ids =
-      user_meetings
-      |> Enum.map(fn meeting -> meeting.calendar_event_id end)
-      |> Enum.filter(& &1)  # Remove nils
+    # Create a set of calendar event IDs that have meetings
+    meeting_calendar_event_ids = MapSet.new(user_meetings)
 
-    # Filter out upcoming events that already have meetings
-    Enum.filter(all_upcoming, fn event ->
-      not (event.id in meeting_calendar_event_ids)
+    # Get all upcoming events and filter out ones that have meetings
+    from(e in CalendarEvent,
+      where: e.user_id == ^user.id and e.start_time > ^DateTime.utc_now(),
+      order_by: [asc: e.start_time]
+    )
+    |> Repo.all()
+    |> Enum.filter(fn event ->
+      not MapSet.member?(meeting_calendar_event_ids, event.id)
     end)
   end
 
