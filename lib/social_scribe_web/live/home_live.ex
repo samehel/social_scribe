@@ -4,7 +4,6 @@ defmodule SocialScribeWeb.HomeLive do
   alias SocialScribe.Calendar
   alias SocialScribe.CalendarSyncronizer
   alias SocialScribe.Bots
-  alias SocialScribe.Meetings
 
   require Logger
 
@@ -12,19 +11,10 @@ defmodule SocialScribeWeb.HomeLive do
   def mount(_params, _session, socket) do
     if connected?(socket), do: send(self(), :sync_calendars)
 
-    user = socket.assigns.current_user
-    past_meeting_event_ids = get_past_meeting_event_ids(user)
-
-    events =
-      user
-      |> Calendar.list_upcoming_events()
-      |> filter_out_past_meetings(past_meeting_event_ids)
-
     socket =
       socket
       |> assign(:page_title, "Upcoming Meetings")
-      |> assign(:events, events)
-      |> assign(:past_meeting_event_ids, past_meeting_event_ids)
+      |> assign(:events, Calendar.list_upcoming_events(socket.assigns.current_user))
       |> assign(:loading, true)
 
     {:ok, socket}
@@ -72,38 +62,15 @@ defmodule SocialScribeWeb.HomeLive do
 
   @impl true
   def handle_info(:sync_calendars, socket) do
-    user = socket.assigns.current_user
-    CalendarSyncronizer.sync_events_for_user(user)
+    CalendarSyncronizer.sync_events_for_user(socket.assigns.current_user)
 
-    # Refresh past meeting IDs in case new meetings were added
-    past_meeting_event_ids = get_past_meeting_event_ids(user)
-
-    events =
-      user
-      |> Calendar.list_upcoming_events()
-      |> filter_out_past_meetings(past_meeting_event_ids)
+    events = Calendar.list_upcoming_events(socket.assigns.current_user)
 
     socket =
       socket
       |> assign(:events, events)
-      |> assign(:past_meeting_event_ids, past_meeting_event_ids)
       |> assign(:loading, false)
 
     {:noreply, socket}
-  end
-
-  # Get calendar_event_ids for all past meetings
-  defp get_past_meeting_event_ids(user) do
-    user
-    |> Meetings.list_user_meetings()
-    |> Enum.map(& &1.calendar_event_id)
-    |> MapSet.new()
-  end
-
-  # Filter out events that already have a meeting record
-  defp filter_out_past_meetings(events, past_meeting_event_ids) do
-    Enum.reject(events, fn event ->
-      MapSet.member?(past_meeting_event_ids, event.id)
-    end)
   end
 end

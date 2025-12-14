@@ -11,13 +11,34 @@ defmodule SocialScribe.Calendar do
 
   @doc """
   Lists all upcoming events for a given user from the local database.
+  Filters out events that already have past meetings.
   """
   def list_upcoming_events(user) do
-    from(e in CalendarEvent,
-      where: e.user_id == ^user.id and e.start_time > ^DateTime.utc_now(),
-      order_by: [asc: e.start_time]
-    )
-    |> Repo.all()
+    all_upcoming =
+      from(e in CalendarEvent,
+        where: e.user_id == ^user.id and e.start_time > ^DateTime.utc_now(),
+        order_by: [asc: e.start_time]
+      )
+      |> Repo.all()
+
+    # Get all meetings for the user to check which calendar events have past meetings
+    user_meetings =
+      from(m in SocialScribe.Meetings.Meeting,
+        where: m.user_id == ^user.id,
+        preload: [:calendar_event]
+      )
+      |> Repo.all()
+
+    # Extract calendar event IDs that have meetings
+    meeting_calendar_event_ids =
+      user_meetings
+      |> Enum.map(fn meeting -> meeting.calendar_event_id end)
+      |> Enum.filter(& &1)  # Remove nils
+
+    # Filter out upcoming events that already have meetings
+    Enum.filter(all_upcoming, fn event ->
+      not (event.id in meeting_calendar_event_ids)
+    end)
   end
 
   @doc """
