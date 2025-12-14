@@ -212,7 +212,7 @@ defmodule SocialScribe.CalendarSyncronizer do
     # Zoom URL patterns - capture the full URL with parameters
     zoom_regex = ~r{https://(?:zoom\.us|app\.zoom\.us)/(?:j|wc|my)/[^\s]+}
     # Teams URL patterns
-    teams_regex = ~r{https://teams\.microsoft\.com/l/meetup-join/[^\s]+}
+    teams_regex = ~r{https://teams\.(?:live\.com|microsoft\.com)/(?:meet|l/meetup-join)/[^\s]+}
     # Google Meet URL patterns
     meet_regex = ~r{https://meet\.google\.com/[a-z-]+}
 
