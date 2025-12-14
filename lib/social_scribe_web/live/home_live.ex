@@ -11,10 +11,15 @@ defmodule SocialScribeWeb.HomeLive do
   def mount(_params, _session, socket) do
     if connected?(socket), do: send(self(), :sync_calendars)
 
+    events =
+      socket.assigns.current_user
+      |> Calendar.list_upcoming_events()
+      |> filter_events_with_completed_meetings()
+
     socket =
       socket
       |> assign(:page_title, "Upcoming Meetings")
-      |> assign(:events, Calendar.list_upcoming_events(socket.assigns.current_user))
+      |> assign(:events, events)
       |> assign(:loading, true)
 
     {:ok, socket}
@@ -64,7 +69,10 @@ defmodule SocialScribeWeb.HomeLive do
   def handle_info(:sync_calendars, socket) do
     CalendarSyncronizer.sync_events_for_user(socket.assigns.current_user)
 
-    events = Calendar.list_upcoming_events(socket.assigns.current_user)
+    events =
+      socket.assigns.current_user
+      |> Calendar.list_upcoming_events()
+      |> filter_events_with_completed_meetings()
 
     socket =
       socket
@@ -72,5 +80,19 @@ defmodule SocialScribeWeb.HomeLive do
       |> assign(:loading, false)
 
     {:noreply, socket}
+  end
+
+  defp filter_events_with_completed_meetings(events) do
+    alias SocialScribe.Meetings
+
+    # Get all calendar event IDs that have completed meetings
+    completed_event_ids =
+      events
+      |> Enum.map(& &1.id)
+      |> Meetings.get_calendar_event_ids_with_completed_meetings()
+      |> MapSet.new()
+
+    # Filter out events that have completed meetings
+    Enum.reject(events, fn event -> MapSet.member?(completed_event_ids, event.id) end)
   end
 end

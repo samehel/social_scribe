@@ -147,6 +147,19 @@ defmodule SocialScribe.Meetings do
     |> Repo.preload([:calendar_event, :recall_bot, :meeting_transcript, :meeting_participants])
   end
 
+  @doc """
+  Returns a list of calendar_event_ids that have completed meetings (recorded_at is not nil).
+  Takes a list of calendar_event_ids to check.
+  """
+  def get_calendar_event_ids_with_completed_meetings(calendar_event_ids) when is_list(calendar_event_ids) do
+    from(m in Meeting,
+      where: m.calendar_event_id in ^calendar_event_ids and not is_nil(m.recorded_at),
+      select: m.calendar_event_id,
+      distinct: true
+    )
+    |> Repo.all()
+  end
+
   alias SocialScribe.Meetings.MeetingTranscript
 
   @doc """

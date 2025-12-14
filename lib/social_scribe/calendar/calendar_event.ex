@@ -2,8 +2,6 @@ defmodule SocialScribe.Calendar.CalendarEvent do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias SocialScribe.Meetings.Meeting
-
   schema "calendar_events" do
     field :status, :string
     field :description, :string
@@ -17,8 +15,6 @@ defmodule SocialScribe.Calendar.CalendarEvent do
     field :record_meeting, :boolean, default: false
     field :user_id, :id
     field :user_credential_id, :id
-
-    has_one :meeting, Meeting
 
     timestamps(type: :utc_datetime)
   end
