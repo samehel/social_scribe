@@ -11,10 +11,12 @@ defmodule SocialScribe.Calendar do
 
   @doc """
   Lists all upcoming events for a given user from the local database.
+  Excludes events that have associated completed meetings.
   """
   def list_upcoming_events(user) do
     from(e in CalendarEvent,
-      where: e.user_id == ^user.id and e.start_time > ^DateTime.utc_now(),
+      left_join: m in assoc(e, :meeting),
+      where: e.user_id == ^user.id and e.start_time > ^DateTime.utc_now() and is_nil(m.id),
       order_by: [asc: e.start_time]
     )
     |> Repo.all()
