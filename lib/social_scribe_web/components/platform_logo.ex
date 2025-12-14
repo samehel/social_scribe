@@ -9,7 +9,7 @@ defmodule SocialScribeWeb.PlatformLogo do
       cond do
         String.contains?(assigns.recall_bot.meeting_url, "meet.google.com") -> "google_meet"
         String.contains?(assigns.recall_bot.meeting_url, "zoom.us") -> "zoom"
-        String.contains?(assigns.recall_bot.meeting_url, "teams.microsoft.com") -> "teams"
+        String.contains?(assigns.recall_bot.meeting_url, "teams.live.com") -> "teams"
         true -> "google_meet"
       end
 
