@@ -100,8 +100,8 @@ defmodule SocialScribe.CalendarSyncronizer do
 
     hangout_link =
       Map.get(item, "hangoutLink") ||
-        Map.get(item, "location") ||
-        Map.get(item, "description") ||
+        extract_meeting_url(Map.get(item, "location")) ||
+        extract_meeting_url(Map.get(item, "description")) ||
         ""
 
     %{
@@ -202,5 +202,47 @@ defmodule SocialScribe.CalendarSyncronizer do
     end)
 
     :ok
+  end
+
+  # Extracts the actual meeting URL from location or description text
+  defp extract_meeting_url(nil), do: nil
+  defp extract_meeting_url(""), do: nil
+
+  defp extract_meeting_url(text) when is_binary(text) do
+    # Zoom URL patterns - capture the full URL with parameters
+    zoom_regex = ~r{https://(?:zoom\.us|app\.zoom\.us)/(?:j|wc|my)/[^\s]+}
+    # Teams URL patterns
+    teams_regex = ~r{https://teams\.microsoft\.com/l/meetup-join/[^\s]+}
+    # Google Meet URL patterns
+    meet_regex = ~r{https://meet\.google\.com/[a-z-]+}
+
+    cond do
+      url = Regex.run(zoom_regex, text) ->
+        zoom_url = List.first(url)
+        # Convert app.zoom.us/wc/ID/start format to zoom.us/j/ID format
+        normalize_zoom_url(zoom_url)
+      url = Regex.run(teams_regex, text) -> List.first(url)
+      url = Regex.run(meet_regex, text) -> List.first(url)
+      true -> text
+    end
+  end
+
+  # Normalize Zoom URLs to standard format
+  defp normalize_zoom_url(url) when is_binary(url) do
+    case String.contains?(url, "/wc/") do
+      true ->
+        # Extract meeting ID from /wc/ID/start format
+        case Regex.run(~r{/wc/(\d+)}, url) do
+          [_, meeting_id] ->
+            # Extract password if present
+            pwd = case Regex.run(~r{pwd=([^&]+)}, url) do
+              [_, password] -> "?pwd=" <> password
+              _ -> ""
+            end
+            "https://zoom.us/j/" <> meeting_id <> pwd
+          _ -> url
+        end
+      false -> url
+    end
   end
 end
