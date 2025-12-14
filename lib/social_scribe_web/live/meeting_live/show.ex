@@ -100,6 +100,8 @@ defmodule SocialScribeWeb.MeetingLive.Show do
     trimmed = String.trim(query || "")
     component_id = socket.assigns.contact_search_component_id
 
+    Logger.info("HubSpot contact search initiated", query: trimmed, user_id: socket.assigns.current_user.id)
+
     cond do
       trimmed == "" ->
         send_update(ContactSearchModalComponent,
@@ -111,9 +113,12 @@ defmodule SocialScribeWeb.MeetingLive.Show do
         {:noreply, socket}
 
       true ->
-        case Accounts.get_user_credential(socket.assigns.current_user, "hubspot")
-             |> fetch_hubspot_contacts(trimmed) do
+        credential = Accounts.get_user_credential(socket.assigns.current_user, "hubspot")
+        Logger.info("HubSpot credential check", has_credential: !is_nil(credential))
+
+        case fetch_hubspot_contacts(credential, trimmed) do
           {:ok, results} ->
+            Logger.info("HubSpot search successful", result_count: length(results))
             send_update(ContactSearchModalComponent,
               id: component_id,
               results: results,
@@ -123,6 +128,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
             {:noreply, socket}
 
           {:error, :missing_credential} ->
+            Logger.warning("HubSpot search failed: missing credential")
             send_update(ContactSearchModalComponent,
               id: component_id,
               results: [],
@@ -132,6 +138,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
             {:noreply, socket}
 
           {:error, :missing_refresh_token} ->
+            Logger.warning("HubSpot search failed: missing refresh token")
             send_update(ContactSearchModalComponent,
               id: component_id,
               results: [],
@@ -141,6 +148,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
             {:noreply, socket}
 
           {:error, {:refresh_failed, reason}} ->
+            Logger.error("HubSpot search failed: token refresh failed", reason: inspect(reason))
             Logger.warning("HubSpot token refresh failed", reason: inspect(reason))
 
             send_update(ContactSearchModalComponent,
@@ -240,7 +248,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
           {:noreply, socket}
 
         {:error, {:api_error, status, body}} ->
-          Logger.warning("HubSpot contact update API error", status: status, body: body)
+          Logger.error("HubSpot contact update API error", status: status, body: inspect(body))
 
           error_message =
             case body do
